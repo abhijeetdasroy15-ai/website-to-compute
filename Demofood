@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Zpple - Food. Fast. Fresh.</title>
+<style>
+  :root{--brand:#ff6600;--bg:#f9f9f9;--card:#fff}
+  *{box-sizing:border-box}
+  body{font-family:Arial, sans-serif;margin:0;padding:0;background:var(--bg);color:#222}
+  header{background:var(--brand);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:12px}
+  header img{height:48px}
+  header h1{font-size:20px;margin:0}
+  .container{padding:18px}
+
+  .search-box{text-align:center;margin:12px 0}
+  .search-box input{width:60%;max-width:700px;padding:10px 12px;font-size:15px;border-radius:8px;border:1px solid #ddd}
+  @media (max-width:600px){.search-box input{width:90%}}
+
+  h2{color:#333;margin:20px 0 10px}
+  .grid{display:flex;flex-wrap:wrap;gap:12px}
+  .grid-item{background:var(--card);padding:12px;border-radius:10px;flex:1 1 150px;min-width:120px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,0.06);text-align:center}
+  .grid-item img{width:100%;height:110px;object-fit:cover;border-radius:8px}
+
+  button{padding:8px 12px;background:var(--brand);color:#fff;border:none;border-radius:6px;cursor:pointer}
+  button:hover{opacity:0.95}
+  .hidden{display:none}
+  .cart{position:fixed;top:12px;right:12px;background:var(--brand);color:#fff;padding:10px 14px;border-radius:40px;cursor:pointer;z-index:60}
+
+  .modal {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(0,0,0,0.45);
+  display: none;
+  justify-content: center;
+  align-items: center;  /* <-- changed */
+  padding: 30px;
+  overflow: auto;
+  z-index: 100;
+}
+  .modal-content{background:#fff;padding:18px;border-radius:12px;width:100%;max-width:720px;box-shadow:0 10px 30px rgba(0,0,0,0.2)}
+
+  input[type="text"],input[type="number"],input[type="password"],select{width:100%;padding:8px;margin:6px 0;border-radius:6px;border:1px solid #ccc}
+  .row{display:flex;gap:10px}
+  .col{flex:1}
+  @media (max-width:600px){.row{flex-direction:column}}
+
+  .small{font-size:13px;color:#666}
+  .restaurant-card{display:flex;flex-direction:column;align-items:center;padding:10px}
+  .restaurant-card img{height:90px;width:100%;object-fit:cover;border-radius:8px}
+
+  .order-history{margin-top:10px}
+  .badge{display:inline-block;background:#eee;padding:4px 8px;border-radius:20px;font-size:13px}
+
+  .restaurant-name{font-weight:600;margin-bottom:8px}
+</style>
+</head>
+<body>
+
+<header>
+  <img src="https://i.imgur.com/ryZQbWh.png" alt="Zpple Logo"/>
+  <h1>Zpple - Food. Fast. Fresh.</h1>
+</header>
+
+<div class="container">
+  <!-- Search -->
+  <div class="search-box">
+    <input type="text" id="searchInput" placeholder="Search for dishes or restaurants..." aria-label="Search" />
+    <div id="searchResults" class="grid" style="margin-top:10px;"></div>
+  </div>
+
+  <!-- Indian's Favourite -->
+  <h2>India's Favourite</h2>
+  <div class="grid" id="favourites"></div>
+
+  <!-- Recommended Restaurants -->
+  <h2>Recommended Restaurants</h2>
+  <div class="grid" id="restaurants"></div>
+
+  <!-- Admin Panel -->
+  <h2>Admin Panel</h2>
+  <div class="row">
+    <div class="col">
+      <input type="password" id="adminPass" placeholder="Enter Admin Password" />
+    </div>
+    <div class="col" style="flex:0 0 150px"><button onclick="loginAdmin()">Login as Admin</button></div>
+  </div>
+
+  <div id="adminPanel" class="hidden" style="margin-top:12px">
+    <h3>Add Restaurant</h3>
+    <input type="text" id="restaurantName" placeholder="Restaurant Name" />
+    <input type="text" id="restaurantImage" placeholder="Restaurant Image URL (optional)" />
+    <button onclick="addRestaurant()">Add Restaurant</button>
+
+    <h3 style="margin-top:12px">Add Dish</h3>
+    <select id="selectRestaurant"><option value="">Select Restaurant</option></select>
+    <input type="text" id="dishName" placeholder="Dish Name" />
+    <input type="number" id="dishPrice" placeholder="Dish Price" />
+    <input type="text" id="dishImage" placeholder="Dish Image URL (optional)" />
+    <button onclick="addDish()">Add Dish</button>
+  </div>
+
+  <!-- Cart -->
+  <div class="cart" onclick="viewCart()">🛒 Cart (<span id="cartCount">0</span>)</div>
+
+  <!-- Order History -->
+  <h2>Order History</h2>
+  <div id="orderHistory" class="order-history small">No past orders</div>
+</div>
+
+<!-- Modal -->
+<div class="modal" id="modal">
+  <div class="modal-content" id="modalContent"></div>
+</div>
+
+<script>
+let restaurants = [];
+function saveData(){
+  localStorage.setItem('restaurants', JSON.stringify(restaurants));
+  localStorage.setItem('dishes', JSON.stringify(dishes));
+  localStorage.setItem('orders', JSON.stringify(orders));
+}
+let dishes = {};
+let cart = [];
+let orders = [];
+let appliedDiscount = 0;
+
+// preload favourites
+const favourites = [
+  {name:"Dosa", img:"https://i.imgur.com/kq4xV9G.jpg"},
+  {name:"Idli", img:"https://i.imgur.com/6kPj5Oa.jpg"},
+  {name:"Biryani", img:"https://i.imgur.com/8d8K6Vg.jpg"},
+  {name:"Burger", img:"https://i.imgur.com/YqjM5hI.jpg"},
+  {name:"Pizza", img:"https://i.imgur.com/6C9Gclq.jpg"},
+  {name:"Noodles", img:"https://i.imgur.com/W9s6wYq.jpg"},
+  {name:"Thali", img:"https://i.imgur.com/nrYlD7R.jpg"}
+];
+
+function loadFavourites(){
+  const favDiv = document.getElementById('favourites');
+  favDiv.innerHTML = '';
+  favourites.forEach(f => {
+    const div = document.createElement('div');
+    div.className = 'grid-item';
+    div.innerHTML = `<img src="${f.img}" alt="${f.name}"/><p>${f.name}</p>`;
+    div.onclick = () => viewDish(f.name);
+    favDiv.appendChild(div);
+  });
+}
+
+
+
+// Initialize UI
+function init(){
+  // Load saved data
+  const savedRestaurants = localStorage.getItem('restaurants');
+  const savedDishes = localStorage.getItem('dishes');
+  const savedOrders = localStorage.getItem('orders');
+  
+  if(savedRestaurants) restaurants = JSON.parse(savedRestaurants);
+  else {
+    // Add default restaurant only if none exist
+    restaurants.push({name:"Zpple Bites", image:"https://i.imgur.com/ryZQbWh.png"});
+  }
+
+  if(savedDishes) dishes = JSON.parse(savedDishes);
+  else {
+    // Add default dishes only if none exist
+    dishes["Zpple Bites"] = [
+      {name:"Dosa", price:120, image:"https://i.imgur.com/kq4xV9G.jpg"},
+      {name:"Biryani", price:250, image:"https://i.imgur.com/8d8K6Vg.jpg"}
+    ];
+  }
+
+  if(savedOrders) orders = JSON.parse(savedOrders);
+
+  loadFavourites();
+  updateRestaurantGrid();
+  updateRestaurantSelect();
+  renderOrderHistory();
+}
+init();
+
+function updateRestaurantGrid(){
+  const grid = document.getElementById('restaurants');
+  grid.innerHTML = '';
+  restaurants.forEach(r => {
+    const div = document.createElement('div');
+    div.className = 'grid-item';
+    div.innerHTML = `<img src="${r.image||'https://i.imgur.com/ryZQbWh.png'}" alt="${r.name}"><p class="restaurant-name">${r.name}</p><p class="small">${(dishes[r.name] && dishes[r.name].length) ? dishes[r.name].length + ' dishes' : 'No dishes yet'}</p>`;
+    div.onclick = () => viewRestaurant(r.name);
+    grid.appendChild(div);
+  });
+}
+
+function updateRestaurantSelect(){
+  const sel = document.getElementById('selectRestaurant');
+  sel.innerHTML = '<option value="">Select Restaurant</option>';
+  restaurants.forEach(r => {
+    const opt = document.createElement('option'); opt.value = r.name; opt.innerText = r.name; sel.appendChild(opt);
+  });
+}
+
+// Dish modal
+function viewDish(dishName){
+  let html = `<h3>${dishName}</h3><p>Available in:</p><ul>`;
+  for(const rName in dishes){
+    const arr = dishes[rName];
+    if(!Array.isArray(arr)) continue;
+    const dish = arr.find(d => d.name === dishName);
+    if(dish){
+      html += `<li style="margin-bottom:10px;"><div style="display:flex;gap:10px;align-items:center"><img src="${dish.image||'https://i.imgur.com/placeholder.png'}" style="width:80px;height:80px;object-fit:cover;border-radius:8px"><div><strong>${rName}</strong><br>₹${dish.price}<br><button onclick="addToCart('${rName}','${dish.name}',${dish.price})">Add to Cart</button></div></div></li>`;
+    }
+  }
+  html += '</ul><button onclick="closeModal()">Close</button>';
+  showModal(html);
+}
+
+function viewRestaurant(rName){
+  let html = `<h3>${rName}</h3><ul>`;
+  (dishes[rName] || []).forEach(d => {
+    html += `<li style="margin-bottom:10px;"><div style="display:flex;gap:10px;align-items:center"><img src="${d.image||'https://i.imgur.com/placeholder.png'}" style="width:80px;height:80px;object-fit:cover;border-radius:8px"><div><strong>${d.name}</strong><br>₹${d.price}<br><button onclick="addToCart('${rName}','${d.name}',${d.price})">Add to Cart</button></div></div></li>`;
+  });
+  html += '</ul><button onclick="closeModal()">Close</button>';
+  showModal(html);
+}
+
+function loginAdmin(){
+  const pass = document.getElementById('adminPass').value;
+  if(pass === 'adr12345'){
+    document.getElementById('adminPanel').classList.remove('hidden');
+    alert('Admin logged in');
+  } else alert('Wrong password');
+}
+
+function addRestaurant(){
+  const name = document.getElementById('restaurantName').value.trim();
+  const image = document.getElementById('restaurantImage').value.trim();
+  if(!name){ alert('Enter restaurant name'); return; }
+  if(restaurants.find(r => r.name === name)){ alert('Restaurant already exists'); return; }
+  restaurants.push({name, image: image || 'https://i.imgur.com/ryZQbWh.png'});
+  dishes[name] = [];
+saveData(); 
+  document.getElementById('restaurantName').value = '';
+  document.getElementById('restaurantImage').value = '';
+  updateRestaurantGrid();
+  updateRestaurantSelect();
+  alert('Restaurant added');
+}
+
+function addDish(){
+  const restaurant = document.getElementById('selectRestaurant').value;
+  const name = document.getElementById('dishName').value.trim();
+  const price = Number(document.getElementById('dishPrice').value);
+  const image = document.getElementById('dishImage').value.trim();
+  if(!restaurant || !name || !price){ alert('Please fill all fields'); return; }
+  dishes[restaurant].push({name, price, image: image || 'https://i.imgur.com/placeholder.png'});
+saveData(); 
+  document.getElementById('dishName').value = '';
+  document.getElementById('dishPrice').value = '';
+  document.getElementById('dishImage').value = '';
+  updateRestaurantGrid();
+  alert('Dish added');
+}
+
+function addToCart(restaurant, name, price){
+  cart.push({restaurant, name, price});
+  document.getElementById('cartCount').innerText = cart.length;
+  alert('Added to cart');
+}
+
+function viewCart(){
+  if(cart.length === 0){ alert('Cart is empty'); return; }
+  renderCartModal();
+}
+
+function renderCartModal(){
+  let html = '<h3>Your Cart</h3><ul>';
+  let total = 0;
+  cart.forEach((it, idx) => {
+    html += `<li style="margin-bottom:8px">${it.name} from ${it.restaurant} - ₹${it.price} <button onclick="removeFromCart(${idx})">Remove</button></li>`;
+    total += it.price;
+  });
+  const gst = Math.round(total * 0.05);
+  const delivery = 50;
+  let grand = total + gst + delivery;
+  if(appliedDiscount > 0) grand = Math.round(grand * (1 - appliedDiscount));
+  html += `</ul><p>Total: ₹${total}</p><p>GST(5%): ₹${gst}</p><p>Delivery: ₹${delivery}</p><p><strong>Grand Total: ₹${grand}</strong></p>`;
+  html += `<input type="text" id="coupon" placeholder="Enter Coupon Code"> <button onclick="applyCoupon()">Apply</button>`;
+  html += `<div style="margin-top:10px"><button onclick="checkout(${grand})">Proceed to Payment</button> <button onclick="closeModal()">Close</button></div>`;
+  showModal(html);
+}
+
+function removeFromCart(index){
+  cart.splice(index,1);
+  document.getElementById('cartCount').innerText = cart.length;
+  renderCartModal();
+}
+
+function applyCoupon(){
+  const code = document.getElementById('coupon').value.trim();
+  if(!code){ alert('Enter coupon'); return; }
+  if(code === 'ZPPLE10'){
+    appliedDiscount = 0.10;
+    alert('10% discount applied');
+    renderCartModal();
+  } else alert('Invalid coupon');
+}
+
+function checkout(amount){
+  const html = `<h3>Payment</h3><p>Amount: ₹${amount}</p><button onclick="paymentSuccess()">Pay with UPI</button> <button onclick="paymentSuccess()">Cash on Delivery</button> <button onclick="closeModal()">Cancel</button>`;
+  showModal(html);
+}
+
+function paymentSuccess(){
+  // save order
+  const order = { id: Date.now(), items: cart.slice(), date: new Date().toLocaleString(), total: calculateGrandTotal() };
+  orders.unshift(order);
+  cart = [];
+  appliedDiscount = 0;
+  document.getElementById('cartCount').innerText = 0;
+  saveData(); 
+  alert('Payment successful! Order placed.');
+  closeModal();
+  renderOrderHistory();
+}
+
+function calculateGrandTotal(){
+  let total = 0; cart.forEach(i => total += i.price);
+  const gst = Math.round(total * 0.05);
+  const delivery = 50;
+  let grand = total + gst + delivery;
+  if(appliedDiscount > 0) grand = Math.round(grand * (1 - appliedDiscount));
+  return grand;
+}
+
+function renderOrderHistory(){
+  const el = document.getElementById('orderHistory');
+  if(orders.length === 0){ el.innerText = 'No past orders'; return; }
+  el.innerHTML = '';
+  orders.forEach(o => {
+    const d = document.createElement('div');
+    d.style.border = '1px solid #eee'; d.style.padding = '8px'; d.style.borderRadius = '8px'; d.style.marginBottom = '8px';
+    d.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><div><strong>Order #${o.id}</strong><div class="small">${o.date}</div></div><div><span class="badge">₹${o.total}</span></div></div>`;
+    const list = document.createElement('ul');
+    o.items.forEach(it => { const li = document.createElement('li'); li.innerText = `${it.name} from ${it.restaurant} - ₹${it.price}`; list.appendChild(li); });
+    d.appendChild(list);
+    el.appendChild(d);
+  });
+}
+
+// Modal helpers
+function showModal(content){ const modal = document.getElementById('modal'); document.getElementById('modalContent').innerHTML = content; modal.style.display = 'flex'; window.scrollTo(0,0); }
+function closeModal(){ document.getElementById('modal').style.display = 'none'; }
+
+// Search
+const searchInput = document.getElementById('searchInput'); const searchResults = document.getElementById('searchResults');
+searchInput.addEventListener('input', function(){
+  const q = this.value.trim().toLowerCase(); searchResults.innerHTML = '';
+  if(!q) return;
+  const results = [];
+  // search dishes
+  for(const r in dishes){ (dishes[r]||[]).forEach(d => { if(d.name.toLowerCase().includes(q)) results.push({type:'dish', name:d.name, restaurant:r, price:d.price, image:d.image}); }); }
+  // search restaurants
+  restaurants.forEach(r => { if(r.name.toLowerCase().includes(q)) results.push({type:'restaurant', name:r.name, image:r.image}); });
+  if(results.length === 0){ searchResults.innerHTML = '<p style="color:#999">No results found</p>'; return; }
+  results.forEach(res => {
+    const div = document.createElement('div'); div.className = 'grid-item'; div.style.flex = '1 1 45%'; div.style.textAlign = 'left'; div.style.display = 'flex'; div.style.alignItems = 'center'; div.style.gap = '10px';
+    if(res.type === 'dish'){
+      const img = document.createElement('img'); img.src = res.image || 'https://i.imgur.com/placeholder.png'; img.style.width = '60px'; img.style.height = '60px'; img.style.objectFit = 'cover'; img.style.borderRadius = '8px';
+      const text = document.createElement('div'); text.innerHTML = `<strong>${res.name}</strong><br><small>${res.restaurant} - ₹${res.price}</small>`;
+      div.appendChild(img); div.appendChild(text); div.onclick = () => viewDish(res.name);
+    } else {
+      const img = document.createElement('img'); img.src = res.image || 'https://i.imgur.com/ryZQbWh.png'; img.style.width = '60px'; img.style.height = '60px'; img.style.objectFit = 'cover'; img.style.borderRadius = '8px';
+      const text = document.createElement('div'); text.innerHTML = `<strong>Restaurant:</strong> ${res.name}`;
+      div.appendChild(img); div.appendChild(text); div.onclick = () => viewRestaurant(res.name);
+    }
+    searchResults.appendChild(div);
+  });
+});
+</script>
+</body>
+</html>
